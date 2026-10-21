@@ -1,0 +1,231 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:mobility:nyc-yellow-taxi-silver
+name: NYC Yellow Taxi Silver Trips
+version: 1.0.0
+status: active
+description:
+  purpose: >-
+    Governed Silver-layer trip records used by the NYC Taxi Demand and Revenue
+    Analytics data product. Each row represents one source trip record that passes
+    the published quality policy.
+  limitations: >-
+    This is an educational analytics product built from public NYC TLC data. The
+    source agency states that the trip data is provided by technology providers
+    and TLC does not guarantee its accuracy or completeness. The 100-mile maximum
+    distance and non-negative fare rules are project-specific publication policy,
+    not source guarantees.
+  usage: >-
+    Use pickup_datetime for trip start analyses, trip_date for daily aggregation,
+    total_amount for recorded passenger charges, and pickup_location_id for zone
+    groupings. Cash tips are not included in total_amount in the source definition.
+team:
+  name: Mobility Analytics Engineering
+schema:
+  - id: silver_yellow_taxi_trips
+    name: silver_yellow_taxi_trips
+    physicalName: silver_yellow_taxi_trips
+    logicalType: object
+    physicalType: table
+    description: >-
+      Standardized, validated trip-level dataset. Invalid records are retained in
+      quarantine_yellow_taxi_trips with one or more rejection reasons.
+    dataGranularityDescription: One row per accepted source trip record; the source does not guarantee a stable unique trip identifier.
+    quality:
+      - id: trip_timestamps_in_order
+        type: text
+        dimension: consistency
+        description: pickup_datetime must be earlier than dropoff_datetime. Violations are quarantined by the Fabric validation notebook.
+      - id: trip_distance_policy
+        type: text
+        dimension: conformity
+        description: Published trip_distance must be greater than 0 and less than or equal to 100 miles. This is a product policy, not an official TLC rule.
+      - id: nonnegative_fare_policy
+        type: text
+        dimension: conformity
+        description: Published fare_amount and total_amount must be non-negative. Refund, void, or negative-fare rows are quarantined for this product.
+      - id: payment_type_domain
+        type: text
+        dimension: conformity
+        description: Non-null payment_type values must be one of 0, 1, 2, 3, 4, 5, or 6, as described by the TLC Yellow Taxi data dictionary.
+    properties:
+      - id: vendor_id
+        name: vendor_id
+        businessName: Taxi technology provider ID
+        logicalType: integer
+        physicalType: INT
+        required: false
+        description: TLC vendor/provider identifier from the source VendorID field.
+      - id: pickup_datetime
+        name: pickup_datetime
+        businessName: Meter-engaged timestamp
+        logicalType: timestamp
+        physicalType: TIMESTAMP
+        required: true
+        description: Date and time when the meter was engaged.
+        quality:
+          - id: pickup_datetime_not_null
+            metric: nullValues
+            mustBe: 0
+            dimension: completeness
+      - id: dropoff_datetime
+        name: dropoff_datetime
+        businessName: Meter-disengaged timestamp
+        logicalType: timestamp
+        physicalType: TIMESTAMP
+        required: true
+        description: Date and time when the meter was disengaged.
+        quality:
+          - id: dropoff_datetime_not_null
+            metric: nullValues
+            mustBe: 0
+            dimension: completeness
+      - id: passenger_count
+        name: passenger_count
+        logicalType: integer
+        physicalType: INT
+        required: false
+        description: Driver-reported passenger count; source records may be missing or uncertain.
+      - id: trip_distance
+        name: trip_distance
+        logicalType: number
+        physicalType: DOUBLE
+        required: true
+        description: Meter-reported elapsed trip distance in miles.
+        quality:
+          - id: trip_distance_non_null
+            metric: nullValues
+            mustBe: 0
+            dimension: completeness
+          - id: trip_distance_within_product_range
+            type: text
+            dimension: conformity
+            description: Value must be greater than 0 and no more than 100 miles; enforced in the Fabric notebook.
+      - id: rate_code_id
+        name: rate_code_id
+        logicalType: integer
+        physicalType: INT
+        required: false
+        description: Final rate code in effect at the end of the trip.
+      - id: store_and_fwd_flag
+        name: store_and_fwd_flag
+        logicalType: string
+        physicalType: STRING
+        required: false
+        description: Whether the trip record was held in vehicle memory before being sent to the provider.
+      - id: pickup_location_id
+        name: pickup_location_id
+        businessName: Pickup taxi zone ID
+        logicalType: integer
+        physicalType: INT
+        required: true
+        description: TLC taxi zone in which the taximeter was engaged.
+      - id: dropoff_location_id
+        name: dropoff_location_id
+        businessName: Drop-off taxi zone ID
+        logicalType: integer
+        physicalType: INT
+        required: true
+        description: TLC taxi zone in which the taximeter was disengaged.
+      - id: payment_type
+        name: payment_type
+        logicalType: integer
+        physicalType: INT
+        required: false
+        description: Numeric code representing how the passenger paid; non-null values must be in the 0-6 domain described by the TLC dictionary.
+      - id: fare_amount
+        name: fare_amount
+        logicalType: number
+        physicalType: DOUBLE
+        required: true
+        description: Time-and-distance fare calculated by the meter.
+        quality:
+          - id: fare_amount_non_null
+            metric: nullValues
+            mustBe: 0
+            dimension: completeness
+          - id: fare_amount_nonnegative
+            type: text
+            dimension: conformity
+            description: Negative fare rows are quarantined by the Fabric notebook.
+      - id: extra
+        name: extra
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: Miscellaneous extras and surcharges.
+      - id: mta_tax
+        name: mta_tax
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: MTA tax captured in the source record.
+      - id: tip_amount
+        name: tip_amount
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: Credit-card tip amount; cash tips are not included by the source.
+      - id: tolls_amount
+        name: tolls_amount
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: Total tolls recorded for the trip.
+      - id: improvement_surcharge
+        name: improvement_surcharge
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: Improvement surcharge captured in the source record.
+      - id: total_amount
+        name: total_amount
+        logicalType: number
+        physicalType: DOUBLE
+        required: true
+        description: Total amount charged to passengers; source definition excludes cash tips.
+        quality:
+          - id: total_amount_non_null
+            metric: nullValues
+            mustBe: 0
+            dimension: completeness
+          - id: total_amount_nonnegative
+            type: text
+            dimension: conformity
+            description: Negative total amounts are quarantined by the Fabric notebook.
+      - id: congestion_surcharge
+        name: congestion_surcharge
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: Congestion surcharge captured in the source record, when available.
+      - id: airport_fee
+        name: airport_fee
+        logicalType: number
+        physicalType: DOUBLE
+        required: false
+        description: Airport pickup fee captured in the source record, when available.
+      - id: trip_date
+        name: trip_date
+        logicalType: date
+        physicalType: DATE
+        required: true
+        description: Derived calendar date of pickup; use for daily reporting.
+      - id: trip_duration_minutes
+        name: trip_duration_minutes
+        logicalType: number
+        physicalType: DOUBLE
+        required: true
+        description: Derived duration between pickup and drop-off in minutes.
+      - id: source_file
+        name: source_file
+        logicalType: string
+        physicalType: STRING
+        required: true
+        description: Landing file name used to provide data lineage.
+      - id: ingested_at
+        name: ingested_at
+        logicalType: timestamp
+        physicalType: TIMESTAMP
+        required: true
+        description: Timestamp when the raw file was ingested into Bronze.
